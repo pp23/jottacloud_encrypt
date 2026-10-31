@@ -1,0 +1,75 @@
+#!/usr/bin/expect -f
+
+set timeout 60
+
+# Fail fast on our own precondition errors
+if {$env(JOTTA_TOKEN) eq ""} {
+    puts stderr "ERROR: JOTTA_TOKEN not set"
+    exit 1
+}
+
+spawn jotta-cli login
+
+# Accept license
+expect {
+    "accept license" {
+        send "yes\r"
+    }
+    timeout {
+        puts stderr "ERROR: timed out waiting for license prompt"
+        exit 1
+    }
+    eof {
+        puts stderr "ERROR: jotta-cli exited before license prompt"
+        exit 1
+    }
+}
+
+# Token
+expect {
+    "login token" {
+        send "$env(JOTTA_TOKEN)\r"
+    }
+    timeout {
+        puts stderr "ERROR: timed out waiting for token prompt"
+        exit 1
+    }
+    eof {
+        puts stderr "ERROR: jotta-cli exited before token prompt"
+        exit 1
+    }
+}
+
+# Device name — note: may or may not appear, so treat timeout as OK
+expect {
+    "Device name" {
+        send "$env(JOTTA_DEVICE_NAME)\r"
+    }
+    timeout {
+        # no device prompt, that's fine
+    }
+    eof {}
+}
+
+# Wait for process to finish
+expect {
+    eof {
+        # normal exit
+    }
+    timeout {
+        puts stderr "ERROR: login did not finish in time"
+        exit 1
+    }
+}
+
+# Check the spawned process's exit code — this is the key part
+set result [wait]
+set exit_code [lindex $result 3]
+
+# Catch the actual failure message too
+if {$exit_code != 0} {
+    puts stderr "ERROR: login failed (exit $exit_code)"
+    exit $exit_code
+}
+
+puts "Login successful"
